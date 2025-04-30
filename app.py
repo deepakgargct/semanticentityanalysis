@@ -1,75 +1,83 @@
 import streamlit as st
 from textblob import TextBlob
-import spacy
-import pandas as pd
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from collections import Counter
+import pandas as pd
+import plotly.express as px
+import spacy
+from spacy import displacy
+from spacy.cli import download
 
-# Load spaCy model
-import en_core_web_sm
-nlp = en_core_web_sm.load()
+# Ensure spaCy model is installed
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
-# Function for sentiment analysis and subjectivity
-def analyze_sentiment(text):
-    blob = TextBlob(text)
-    sentiment = "Positive" if blob.sentiment.polarity > 0 else "Negative" if blob.sentiment.polarity < 0 else "Neutral"
-    subjectivity = "Subjective" if blob.sentiment.subjectivity > 0.5 else "Objective"
-    return sentiment, subjectivity
+# Streamlit layout
+st.title("Text Analysis: Sentiment and Entity Analysis")
+st.write("""
+This app performs sentiment analysis and entity extraction from the text you provide.
+It also visualizes sentiment trends and displays a word cloud.
+""")
 
-# Function for entity analysis
-def analyze_entities(text):
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
-    return entities
+# Input box for the user to enter text
+input_text = st.text_area("Enter Text for Analysis", height=200)
 
-# Function to generate word cloud
-def generate_wordcloud(text):
-    stopwords = set(["the", "and", "a", "to", "in", "of", "for", "on", "with", "as", "is", "at", "by"])
-    wordcloud = WordCloud(stopwords=stopwords, width=800, height=400, max_words=100).generate(text)
-    return wordcloud
-
-# Function to categorize sentiment and display pie chart
-def sentiment_pie_chart(sentiment_data):
-    sentiment_counts = Counter(sentiment_data)
-    labels = list(sentiment_counts.keys())
-    sizes = list(sentiment_counts.values())
-
-    # Create Pie chart
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, colors=["#4CAF50", "#FF6347", "#FFD700"])
-    ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle.
-
-    st.pyplot(fig)
-
-# Streamlit UI
-st.title("Sentiment and Entity Analysis")
-
-# Input box for user text
-text_input = st.text_area("Enter your text here for analysis:")
-
-# Button to process the text
-if st.button("Analyze Text"):
-    if text_input:
+# Button to trigger analysis
+if st.button("Analyze"):
+    if input_text.strip() != "":
         # Sentiment Analysis
-        sentiment, subjectivity = analyze_sentiment(text_input)
-        st.write(f"Sentiment: {sentiment}")
-        st.write(f"Subjectivity: {subjectivity}")
-
-        # Entity Analysis
-        entities = analyze_entities(text_input)
-        if entities:
-            st.write("Entities Found:")
-            for entity in entities:
-                st.write(f"- {entity[0]} (Label: {entity[1]})")
+        blob = TextBlob(input_text)
+        sentiment = blob.sentiment.polarity
+        if sentiment > 0:
+            sentiment_label = "Positive"
+        elif sentiment < 0:
+            sentiment_label = "Negative"
         else:
-            st.write("No entities found.")
+            sentiment_label = "Neutral"
+        
+        st.write(f"Sentiment Score: {sentiment}")
+        st.write(f"Sentiment Label: {sentiment_label}")
 
-        # Sentiment Pie Chart
-        sentiment_pie_chart([sentiment])
+        # Displaying Pie Chart for Sentiment Categorization
+        sentiment_data = {"Positive": 0, "Negative": 0, "Neutral": 0}
+        sentiment_data[sentiment_label] += 1
+        sentiment_df = pd.DataFrame(list(sentiment_data.items()), columns=["Sentiment", "Count"])
+        
+        fig = px.pie(sentiment_df, names="Sentiment", values="Count", title="Sentiment Distribution")
+        st.plotly_chart(fig)
 
-        # Word Cloud
-        wordcloud = generate_wordcloud(text_input)
-        st.image(wordcloud.to_array(), caption="Generated Word Cloud", use_column_width=True)
+        # Entity Extraction using spaCy
+        doc = nlp(input_text)
+        entities = [(ent.text, ent.label_) for ent in doc.ents]
+        
+        if entities:
+            st.subheader("Extracted Entities")
+            entity_df = pd.DataFrame(entities, columns=["Entity", "Label"])
+            st.write(entity_df)
+        else:
+            st.write("No entities found in the text.")
+
+        # Word Cloud Generation
+        wordcloud = WordCloud(width=800, height=400, max_words=100, background_color="white").generate(input_text)
+        
+        st.subheader("Word Cloud")
+        plt.figure(figsize=(8, 6))
+        plt.imshow(wordcloud, interpolation="bilinear")
+        plt.axis("off")
+        st.pyplot(plt)
+        
+        # Recommendations (Basic Example based on Sentiment)
+        st.subheader("Recommendations")
+        if sentiment > 0:
+            st.write("Recommendation: The text has a positive tone. Continue on the same path.")
+        elif sentiment < 0:
+            st.write("Recommendation: The text has a negative tone. Consider rewording for a more positive message.")
+        else:
+            st.write("Recommendation: The text is neutral. Try adding more engaging language.")
+
     else:
-        st.write("Please enter some text to analyze.")
+        st.warning("Please enter some text to analyze.")
+
