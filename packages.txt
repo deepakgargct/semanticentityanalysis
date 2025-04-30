@@ -1,3 +1,2 @@
-libenchant-dev
 libmagic-dev
 build-essential
