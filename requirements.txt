@@ -1,0 +1,8 @@
+streamlit
+textblob
+matplotlib
+wordcloud
+spacy
+pandas
+plotly
+scikit-learn
