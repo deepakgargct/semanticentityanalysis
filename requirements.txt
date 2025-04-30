@@ -3,3 +3,4 @@ textblob
 plotly
 wordcloud
 spacy
+scikit-learn==1.0.2
