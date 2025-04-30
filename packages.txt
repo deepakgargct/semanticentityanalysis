@@ -1,1 +1,3 @@
-libenchant1c2a
+libenchant-dev
+libmagic-dev
+build-essential
