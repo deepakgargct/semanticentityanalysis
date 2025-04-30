@@ -2,8 +2,13 @@ import spacy
 import streamlit as st
 from collections import defaultdict
 
-# Load the spaCy English model
-nlp = spacy.load("en_core_web_sm")
+# Attempt to load the spaCy model
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    st.error("spaCy model 'en_core_web_sm' could not be found. Please install it by running the following command in your terminal:\n"
+             "`python -m spacy download en_core_web_sm`")
+    st.stop()  # Stop the app if the model cannot be loaded
 
 # Recommendations dictionary
 recommendations = {
@@ -14,51 +19,28 @@ recommendations = {
 }
 
 def extract_entities(text):
-    """
-    Extract named entities from the text using spaCy's NER.
-    
-    Args:
-        text (str): The input text from which entities are to be extracted.
-
-    Returns:
-        list: A list of tuples containing (entity text, entity label).
-    """
     doc = nlp(text)
     entities = [(ent.text, ent.label_) for ent in doc.ents]
     return entities
 
 def generate_recommendations(entities):
-    """
-    Generate recommendations based on the extracted entities.
-
-    Args:
-        entities (list): A list of tuples containing (entity text, entity label).
-
-    Returns:
-        defaultdict: A dictionary of recommendations.
-    """
     recs = defaultdict(list)
-
     for entity, label in entities:
         if label in recommendations:
             recs[entity].append(recommendations[label])
-
     return recs
 
 def main():
     st.title("Entity Recognition Tool")
     
-    # User input
     input_text = st.text_area("Enter Text Here:", height=200)
 
     if st.button("Extract Entities"):
-        # Step 1: Extract entities
         entities = extract_entities(input_text)
         st.subheader("Extracted Entities:")
         for entity, label in entities:
             st.write(f" - **{entity}**: {label}")
 
-        # Step 2: Generate Recommendations
         recs = generate_recommendations(entities)
         
         st.subheader("Recommendations:")
