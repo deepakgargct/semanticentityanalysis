@@ -1,107 +1,70 @@
-import streamlit as st
-from textblob import TextBlob
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
 import spacy
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import streamlit as st
+from collections import defaultdict
 
-# Load spaCy model for Named Entity Recognition (NER)
+# Load the spaCy English model
 nlp = spacy.load("en_core_web_sm")
 
-# Title of the app
-st.title("Sentiment, Entity, and Semantic Analysis Tool")
+# Recommendations dictionary
+recommendations = {
+    "ORG": "Consider connecting with their official website or checking their LinkedIn page.",
+    "PERSON": "You might want to consider reaching out on social media platforms or sending an email.",
+    "GPE": "Look for local events or services in your area related to this entity.",
+    "PRODUCT": "Check out online reviews or the manufacturer's website for more details.",
+}
 
-# Add an input box for the user to type text
-user_input = st.text_area("Enter the text for analysis:", height=150)
+def extract_entities(text):
+    """
+    Extract named entities from the text using spaCy's NER.
+    
+    Args:
+        text (str): The input text from which entities are to be extracted.
 
-# Function for sentiment analysis
-def sentiment_analysis(text):
-    blob = TextBlob(text)
-    sentiment_score = blob.sentiment.polarity
-    if sentiment_score > 0:
-        sentiment = "Positive"
-    elif sentiment_score < 0:
-        sentiment = "Negative"
-    else:
-        sentiment = "Neutral"
-    return sentiment, sentiment_score
-
-# Function for entity analysis using spaCy
-def entity_analysis(text):
+    Returns:
+        list: A list of tuples containing (entity text, entity label).
+    """
     doc = nlp(text)
-    entities = [(entity.text, entity.label_) for entity in doc.ents]
+    entities = [(ent.text, ent.label_) for ent in doc.ents]
     return entities
 
-# Function for semantic analysis (using TF-IDF for now)
-def semantic_analysis(text):
-    # Split text into sentences (lines) for analysis
-    sentences = text.split("\n")
-    
-    # Vectorize the sentences using TF-IDF
-    vectorizer = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = vectorizer.fit_transform(sentences)
-    
-    # Calculate cosine similarity between sentences
-    cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-    
-    # Prepare a DataFrame for easy display of similarities
-    similarity_df = pd.DataFrame(cosine_sim, columns=[f"Line {i+1}" for i in range(len(sentences))], index=[f"Line {i+1}" for i in range(len(sentences))])
-    
-    return similarity_df
+def generate_recommendations(entities):
+    """
+    Generate recommendations based on the extracted entities.
 
-# Function for generating recommendations
-def generate_recommendations(text):
-    sentences = text.split("\n")
-    recommendations = []
-    
-    for i, sentence in enumerate(sentences):
-        # Simple recommendation based on sentence length (just for illustration)
-        if len(sentence.split()) < 5:
-            recommendations.append(f"Line {i+1}: Consider adding more details to make this sentence longer.")
-        elif len(sentence.split()) > 20:
-            recommendations.append(f"Line {i+1}: Consider shortening this sentence for better readability.")
-        else:
-            recommendations.append(f"Line {i+1}: Sentence length is optimal.")
-    
-    return recommendations
+    Args:
+        entities (list): A list of tuples containing (entity text, entity label).
 
-# Button to trigger analysis
-if st.button("Analyze"):
-    if user_input:
-        # Sentiment analysis
-        sentiment, sentiment_score = sentiment_analysis(user_input)
-        st.write(f"Sentiment: {sentiment} (Score: {sentiment_score})")
+    Returns:
+        defaultdict: A dictionary of recommendations.
+    """
+    recs = defaultdict(list)
+
+    for entity, label in entities:
+        if label in recommendations:
+            recs[entity].append(recommendations[label])
+
+    return recs
+
+def main():
+    st.title("Entity Recognition Tool")
+    
+    # User input
+    input_text = st.text_area("Enter Text Here:", height=200)
+
+    if st.button("Extract Entities"):
+        # Step 1: Extract entities
+        entities = extract_entities(input_text)
+        st.subheader("Extracted Entities:")
+        for entity, label in entities:
+            st.write(f" - **{entity}**: {label}")
+
+        # Step 2: Generate Recommendations
+        recs = generate_recommendations(entities)
         
-        # Entity Analysis
-        entities = entity_analysis(user_input)
-        if entities:
-            st.write("Entities Found:")
-            for entity in entities:
-                st.write(f"- {entity[0]} ({entity[1]})")
-        else:
-            st.write("No entities found.")
-        
-        # Semantic Analysis
-        semantic_sim = semantic_analysis(user_input)
-        st.write("Semantic Similarity between lines:")
-        st.dataframe(semantic_sim)
-        
-        # Recommendations for improvement
-        recommendations = generate_recommendations(user_input)
-        st.write("Content Improvement Recommendations:")
-        for rec in recommendations:
-            st.write(rec)
+        st.subheader("Recommendations:")
+        for entity, rec_list in recs.items():
+            for rec in rec_list:
+                st.write(f" - For **'{entity}'**: {rec}")
 
-        # Word Cloud generation
-        wordcloud = WordCloud(width=800, height=400, background_color='white', max_words=150, colormap='coolwarm').generate(user_input)
-
-        # Display Word Cloud
-        st.subheader("Word Cloud:")
-        plt.imshow(wordcloud, interpolation='bilinear')
-        plt.axis('off')
-        st.pyplot(plt)
-
-    else:
-        st.warning("Please enter some text to analyze.")
+if __name__ == "__main__":
+    main()
