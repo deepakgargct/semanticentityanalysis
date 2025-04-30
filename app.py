@@ -1,83 +1,103 @@
 import streamlit as st
+import pandas as pd
 from textblob import TextBlob
-import spacy
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud, STOPWORDS
-import pandas as pd
+import plotly.express as px
+import spacy
+import subprocess
+import sys
+import importlib
 
-# Load spaCy model
+# Ensure spaCy model is downloaded
+try:
+    importlib.import_module("en_core_web_sm")
+except ImportError:
+    subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+
 nlp = spacy.load("en_core_web_sm")
 
-st.title("Text Analysis App")
-st.markdown("This app performs **Sentiment Analysis**, **Entity Recognition**, and gives **Recommendations**.")
+st.set_page_config(page_title="Semantic & Entity Analyzer", layout="wide")
+st.title("🧠 Semantic Analyzer with Sentiment, Entities & Recommendations")
 
-# Text input and button
-user_input = st.text_area("Enter your text for analysis:", height=200)
-if st.button("Analyze"):
-    if not user_input.strip():
-        st.warning("Please enter some text.")
+# User input with submit button
+with st.form("text_form"):
+    text = st.text_area("Enter text to analyze", height=300)
+    submitted = st.form_submit_button("Analyze")
+
+if submitted and text.strip():
+    blob = TextBlob(text)
+    polarity = blob.sentiment.polarity
+    subjectivity = blob.sentiment.subjectivity
+
+    # Determine sentiment category
+    if polarity > 0.1:
+        sentiment = "Positive"
+    elif polarity < -0.1:
+        sentiment = "Negative"
     else:
-        # Sentiment Analysis
-        blob = TextBlob(user_input)
-        sentiment_polarity = blob.sentiment.polarity
-        subjectivity = blob.sentiment.subjectivity
+        sentiment = "Neutral"
 
-        if sentiment_polarity > 0:
-            sentiment_label = "Positive"
-        elif sentiment_polarity < 0:
-            sentiment_label = "Negative"
-        else:
-            sentiment_label = "Neutral"
+    # Show sentiment
+    st.subheader("Sentiment Summary")
+    st.metric("Polarity", f"{polarity:.2f}")
+    st.metric("Subjectivity", f"{subjectivity:.2f}")
+    st.metric("Category", sentiment)
 
-        st.subheader("Sentiment Analysis")
-        st.write(f"**Polarity:** {sentiment_polarity:.2f}")
-        st.write(f"**Subjectivity:** {subjectivity:.2f}")
-        st.write(f"**Sentiment Label:** {sentiment_label}")
+    # Pie chart
+    st.subheader("Sentiment Category Pie Chart")
+    fig1 = px.pie(
+        names=["Positive", "Neutral", "Negative"],
+        values=[
+            1 if sentiment == "Positive" else 0,
+            1 if sentiment == "Neutral" else 0,
+            1 if sentiment == "Negative" else 0,
+        ],
+        color_discrete_sequence=px.colors.qualitative.Pastel,
+    )
+    st.plotly_chart(fig1, use_container_width=True)
 
-        # Pie Chart
-        labels = ['Positive', 'Negative', 'Neutral']
-        sizes = [0, 0, 0]
-        if sentiment_label == "Positive": sizes[0] = 1
-        elif sentiment_label == "Negative": sizes[1] = 1
-        else: sizes[2] = 1
+    # WordCloud
+    st.subheader("Word Cloud")
+    stopwords = set(STOPWORDS)
+    wc = WordCloud(
+        background_color="white",
+        stopwords=stopwords,
+        max_words=200,
+        width=800,
+        height=400
+    ).generate(text)
 
-        fig1, ax1 = plt.subplots()
-        ax1.pie(sizes, labels=labels, autopct='%1.1f%%', colors=['green', 'red', 'gray'])
-        ax1.axis('equal')
-        st.pyplot(fig1)
+    fig2, ax = plt.subplots(figsize=(10, 5))
+    ax.imshow(wc, interpolation="bilinear")
+    ax.axis("off")
+    st.pyplot(fig2)
 
-        # Word Cloud
-        st.subheader("Word Cloud")
-        wordcloud = WordCloud(width=800, height=400, stopwords=STOPWORDS, background_color='white').generate(user_input)
-        fig2, ax2 = plt.subplots()
-        ax2.imshow(wordcloud, interpolation='bilinear')
-        ax2.axis('off')
-        st.pyplot(fig2)
+    # Entity analysis
+    st.subheader("Named Entity Recognition")
+    doc = nlp(text)
+    if doc.ents:
+        entity_data = [(ent.text, ent.label_) for ent in doc.ents]
+        df_entities = pd.DataFrame(entity_data, columns=["Entity", "Label"])
+        st.dataframe(df_entities)
+    else:
+        st.info("No entities found in the text.")
 
-        # Entity Analysis
-        st.subheader("Entity Recognition")
-        doc = nlp(user_input)
-        entities = [(ent.text, ent.label_) for ent in doc.ents]
-        if entities:
-            entity_df = pd.DataFrame(entities, columns=["Entity", "Label"])
-            st.dataframe(entity_df)
-        else:
-            st.info("No named entities found.")
+    # Basic Recommendations
+    st.subheader("Recommendations")
+    recommendations = []
+    if subjectivity > 0.5:
+        recommendations.append("Try to make your content more objective.")
+    else:
+        recommendations.append("Content has good objectivity.")
+    
+    if polarity < -0.3:
+        recommendations.append("Consider revising negative tone for a more balanced message.")
+    elif polarity > 0.3:
+        recommendations.append("Positive tone detected — great for persuasive or promotional content!")
 
-        # Recommendations
-        st.subheader("Recommendations")
-        recommendations = []
-        if sentiment_label == "Positive":
-            recommendations.append("✅ Consider amplifying this content on social channels.")
-        elif sentiment_label == "Negative":
-            recommendations.append("⚠️ Review for possible issues or complaints.")
+    if not recommendations:
+        recommendations.append("Content sentiment is balanced and neutral.")
 
-        for ent, label in entities:
-            if label in ["ORG", "PERSON"]:
-                recommendations.append(f"📌 Mentioned entity '{ent}' may be of strategic importance.")
-
-        if recommendations:
-            for rec in recommendations:
-                st.write(rec)
-        else:
-            st.write("No specific recommendations found.")
+    for rec in recommendations:
+        st.write(f"👉 {rec}")
