@@ -1,8 +1,7 @@
-streamlit
-textblob
-wordcloud
-matplotlib
-plotly
-pandas
-numpy
-vaderSentiment
+streamlit==1.11.0
+textblob==0.15.3
+vaderSentiment==3.3.2
+spacy==3.2.3
+plotly==5.3.1
+matplotlib==3.4.3
+wordcloud==1.8.1
