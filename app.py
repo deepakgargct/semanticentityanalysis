@@ -2,13 +2,11 @@ import spacy
 import streamlit as st
 from collections import defaultdict
 
-# Attempt to load the spaCy model
+# Attempt to load the spaCy model, and handle the error when it doesn't exist
 try:
     nlp = spacy.load("en_core_web_sm")
 except OSError:
-    st.error("spaCy model 'en_core_web_sm' could not be found. Please install it by running the following command in your terminal:\n"
-             "`python -m spacy download en_core_web_sm`")
-    st.stop()  # Stop the app if the model cannot be loaded
+    nlp = None  # Set nlp to None if model fails to load
 
 # Recommendations dictionary
 recommendations = {
@@ -19,6 +17,8 @@ recommendations = {
 }
 
 def extract_entities(text):
+    if nlp is None:
+        return []  # Return an empty list if spaCy model is not loaded
     doc = nlp(text)
     entities = [(ent.text, ent.label_) for ent in doc.ents]
     return entities
@@ -36,6 +36,10 @@ def main():
     input_text = st.text_area("Enter Text Here:", height=200)
 
     if st.button("Extract Entities"):
+        if nlp is None:
+            st.error("Unable to load the spaCy model 'en_core_web_sm'. Please install it in your local environment.")
+            return
+        
         entities = extract_entities(input_text)
         st.subheader("Extracted Entities:")
         for entity, label in entities:
