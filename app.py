@@ -1,56 +1,58 @@
-import spacy
 import streamlit as st
-from collections import defaultdict
+from dandelion import DataTXT
+import os
 
-# Attempt to load the spaCy model, and handle the error when it doesn't exist
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    nlp = None  # Set nlp to None if model fails to load
+# Streamlit page config
+st.set_page_config(page_title="Dandelion NLP App", layout="centered")
 
-# Recommendations dictionary
-recommendations = {
-    "ORG": "Consider connecting with their official website or checking their LinkedIn page.",
-    "PERSON": "You might want to consider reaching out on social media platforms or sending an email.",
-    "GPE": "Look for local events or services in your area related to this entity.",
-    "PRODUCT": "Check out online reviews or the manufacturer's website for more details.",
-}
+st.title("🧠 NLP with Dandelion.eu API")
+st.write("This app performs **Entity Extraction** and **Sentiment Analysis** using [Dandelion.eu](https://dandelion.eu).")
 
-def extract_entities(text):
-    if nlp is None:
-        return []  # Return an empty list if spaCy model is not loaded
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
-    return entities
+# Input API Token
+token = st.text_input("🔐 Enter your Dandelion API Token", type="password")
 
-def generate_recommendations(entities):
-    recs = defaultdict(list)
-    for entity, label in entities:
-        if label in recommendations:
-            recs[entity].append(recommendations[label])
-    return recs
+# Validate token
+if token:
+    datatxt = DataTXT(token=token)
 
-def main():
-    st.title("Entity Recognition Tool")
-    
-    input_text = st.text_area("Enter Text Here:", height=200)
+    # Text input
+    user_input = st.text_area("✏️ Enter text to analyze:", height=200)
 
-    if st.button("Extract Entities"):
-        if nlp is None:
-            st.error("Unable to load the spaCy model 'en_core_web_sm'. Please install it in your local environment.")
-            return
-        
-        entities = extract_entities(input_text)
-        st.subheader("Extracted Entities:")
-        for entity, label in entities:
-            st.write(f" - **{entity}**: {label}")
+    if user_input:
+        # Select tasks
+        tasks = st.multiselect("🛠️ Select NLP tasks", ["Entity Extraction", "Sentiment Analysis"])
 
-        recs = generate_recommendations(entities)
-        
-        st.subheader("Recommendations:")
-        for entity, rec_list in recs.items():
-            for rec in rec_list:
-                st.write(f" - For **'{entity}'**: {rec}")
+        if st.button("🔍 Analyze"):
+            with st.spinner("Analyzing..."):
 
-if __name__ == "__main__":
-    main()
+                # Language detection
+                lang_result = datatxt.li(user_input)
+                lang = lang_result.get("detectedLangs", [{}])[0].get("lang", "unknown")
+                st.success(f"Detected Language: `{lang}`")
+
+                if "Entity Extraction" in tasks:
+                    st.subheader("📌 Named Entity Extraction")
+                    try:
+                        nex_result = datatxt.nex(user_input, include="types,abstract,categories")
+                        if nex_result.annotations:
+                            for ann in nex_result.annotations:
+                                st.markdown(f"- **{ann.label}** (URI: {ann.uri}) — {ann.categories or 'No category'}")
+                        else:
+                            st.info("No entities found.")
+                    except Exception as e:
+                        st.error(f"Entity extraction error: {e}")
+
+                if "Sentiment Analysis" in tasks:
+                    st.subheader("❤️ Sentiment Analysis")
+                    try:
+                        sentiment = datatxt.sent(user_input)
+                        sentiment_score = sentiment.get("sentiment", {}).get("score", 0.0)
+                        sentiment_type = sentiment.get("sentiment", {}).get("type", "unknown")
+                        st.write(f"**Sentiment:** {sentiment_type.capitalize()} ({sentiment_score:.2f})")
+                    except Exception as e:
+                        st.error(f"Sentiment analysis error: {e}")
+else:
+    st.warning("Please enter your Dandelion API token to begin.")
+
+st.markdown("---")
+st.caption("Made with ❤️ using Streamlit and Dandelion.eu")
